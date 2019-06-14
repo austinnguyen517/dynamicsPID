@@ -5,12 +5,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
+import matplotlib.pyplot as plt
 
 from GenNN import GeneralNN
 from Parse import load_dirs, df_to_training
 from utils.nn import Swish
+from EnsembleNN import EnsembleNN
 
-'''dir_list = ["data/c25_rand/",
+dir_list = ["data/c25_rand/",
             "data/c25_roll1/",
             "data/c25_roll2/",
             "data/c25_roll3/",
@@ -26,7 +28,7 @@ from utils.nn import Swish
             "data/c25_roll13/",
             "data/c25_roll14/",
             "data/c25_roll15/",]
-
+'''
 load_params ={
     'delta_state': True,                # normally leave as True, prediction mode
     'include_tplus1': True,             # when true, will include the time plus one in the dataframe (for trying predictions of true state vs delta)
@@ -86,35 +88,39 @@ nn_params = {                           # all should be pretty self-explanatory
     'dt' : np.shape(dX)[1],
     'hid_width' : 250,
     'hid_depth' : 2,
-    'bayesian_flag' : False,
+    'bayesian_flag' : True,
     'activation': Swish(),
-    'dropout' : 0.25,
+    'dropout' : 0.2,
     'split_flag' : False,
     'pred_mode' : 'Delta State',
-    'ensemble' : False
+    'ensemble' : 5
 }
 
 train_params = {
-    'epochs' : 40,
+    'epochs' : 35, #start at this # of epochs to find optimal epochs w/ respect to testerror
     'batch_size' : 18,
     'optim' : 'Adam',
-    'split' : 0.8,
-    'lr': .00275, # bayesian .00175, mse:  .0001
-    'lr_schedule' : [30,.6],
+    'split' : 0.95,
+    'lr': .00175, # bayesian .00175, mse:  .0001
+    'lr_schedule' : [6,.7],
     'test_loss_fnc' : [],
     'preprocess' : True,
     'noprint' : False
 }
 
-newNN = GeneralNN(nn_params)
-newNN.init_weights_orth()
-testLoss, trainLoss = newNN.train_cust((X, U, dX), train_params)
-path = "TrainedDModel.txt"
-newNN.save_model(path)'''
+#newNN = GeneralNN(nn_params)
+#newNN.init_weights_orth()
+#testLoss, trainLoss = newNN.train_cust((X, U, dX), train_params)
+#path = "TrainedDModel.txt"
+#newNN.save_model(path)
+
+ensembleNN = EnsembleNN(nn_params)
+ensembleNN.init_weights_orth()
+ensembleNN.train_cust((X, U, dX), train_params)
+path = "TrainedEnsembleModel2.txt"
+ensembleNN.save_model(path)'''
 
 def getinput(model):
-    dir_list = ["data/c25_roll1/"]
-
     load_params ={
         'delta_state': True,                # normally leave as True, prediction mode
         'include_tplus1': True,             # when true, will include the time plus one in the dataframe (for trying predictions of true state vs delta)
