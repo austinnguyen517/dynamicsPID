@@ -11,9 +11,9 @@ PID:
   Graphs: Visual representations of results from rollouts, PID parameter search, and model training. Contains all graphs throughout optimization and tuning process
   
   Out of date files:
-    - DynamicsModel.py
-    - ExecuteSim.py
-    - ExpectedImprovement.py 
+  - DynamicsModel.py
+  - ExecuteSim.py
+  - ExpectedImprovement.py 
   
   - Ensemble NN: wrapper for implentation of ensemble neural network
   - ExecuteTrain: wrapper for training ensemble neural network or general network. Graphs model training/testing loss. Contains method to return initial conditions for bayesian optimization
