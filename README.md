@@ -5,15 +5,15 @@
 - Graphs of predicted rollouts, training/testing loss of model with respect to epochs and loss gradients with respect to PID parameters
 
 All files can be found in folder: PID
-PIDSearch.py is inaccurate
 
 PID:
   Graphs: Visual representations of results from rollouts, PID parameter search, and model training. Contains all graphs throughout optimization and tuning process
   
-  Out of date files:
+  Out of date/Faulty implementation files:
   - DynamicsModel.py
   - ExecuteSim.py
   - ExpectedImprovement.py 
+  - PIDSearch.py
   
   File Descriptions:
   - Ensemble NN: wrapper for implentation of ensemble neural network
