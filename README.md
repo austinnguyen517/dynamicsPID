@@ -6,3 +6,21 @@
 
 All files can be found in folder: PID
 PIDSearch.py is inaccurate
+
+PID:
+  Graphs: Visual representations of results from rollouts, PID parameter search, and model training. Contains all graphs throughout optimization and tuning process
+  
+  Out of date files:
+    - DynamicsModel.py
+    - ExecuteSim.py
+    - ExpectedImprovement.py 
+  
+  - Ensemble NN: wrapper for implentation of ensemble neural network
+  - ExecuteTrain: wrapper for training ensemble neural network or general network. Graphs model training/testing loss. Contains method to return initial conditions for bayesian optimization
+  - GenNN: general neural network class for training and optimization. Used in ensemble neural network.
+  - PID: class simulating PID regulators (proportion, integral, derivative). Used to regulate roll, pitch, yaw and respective rates
+  - PID_BO_iono: uses bayesian optimization to find optimal PID parameters. Expected improvement with Opto library. Objective functions use trained ensemble neural network and PID class
+  - PNNLoss: probabalistic loss of neural networks. Used to optimize ensemble/general neural network
+  - Parse: parses data files from quadcopter to data frames workable with training models
+  - TestRollouts: takes PID parameters and plots simulated rollouts based on train model to test stability
+  - TrainedModels.txt: Various trained models used for bayesian optimization and rollout simulation
