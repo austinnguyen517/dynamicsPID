@@ -244,6 +244,7 @@ class GeneralNN(nn.Module):
             scheduler.step()
             avg_loss = torch.zeros(1)
             num_batches = len(trainLoader)/batch_size
+            self.features.train()
             for i, (input, target) in enumerate(trainLoader):
                 optim.zero_grad()
                 output = self.forward(input).float()
@@ -269,11 +270,13 @@ class GeneralNN(nn.Module):
                 # if not loss.data.numpy() == loss.data.numpy(): # Some errors make the loss NaN. this is a problem.
                 else:
                     print("loss is NaN")                       # This is helpful: it'll catch that when it happens,
+                    print("Stopping training at ", epoch, " epochs.")
                     # print("Output: ", output, "\nInput: ", input, "\nLoss: ", loss)
                     errors.append(np.nan)
                     error_train.append(np.nan)
                     return errors, error_train                 # and give the output and input that made the loss NaN
-                avg_loss += loss.item()/(len(trainLoader)*batch_size)                  # update the overall average loss with this batch's loss
+                avg_loss += (loss.item()/(len(trainLoader)*batch_size))
+                '''Editted to return list of losses every epoch'''# update the overall average loss with this batch's loss
 
             self.features.eval()
             test_error = torch.zeros(1)
@@ -288,9 +291,9 @@ class GeneralNN(nn.Module):
                 test_error += loss.item()/(len(testLoader)*batch_size)
             test_error = test_error
 
-            if (epoch % 1 == 0): print("Epoch:", '%04d' % (epoch + 1), "train loss=", "{:.6f}".format(avg_loss.data[0]), "test loss=", "{:.6f}".format(test_error.data[0]))
-            error_train.append(avg_loss.data[0].numpy())
-            errors.append(test_error.data[0].numpy())
+            #if (epoch % 1 == 0): print("Epoch:", '%04d' % (epoch + 1), "train loss=", "{:.6f}".format(avg_loss.data[0]), "test loss=", "{:.6f}".format(test_error.data[0]))
+            error_train.append(avg_loss[0].tolist())
+            errors.append(test_error[0].tolist())
         return errors, error_train
 
     def save_model(self, filepath):

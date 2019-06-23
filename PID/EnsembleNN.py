@@ -25,6 +25,18 @@ from PNNLoss import PNNLoss_Gaussian
 import matplotlib.pyplot as plt
 
 class EnsembleNN(nn.Module):
+    '''Ensemble neural network class
+        Attributes:
+            E: number of networks/ensembles
+            prob: flag signaling PNN
+            networks: list of networks/ensembles
+        Methods:
+            train_cust: takes data and train parameters to train each network
+            init_weights_orth: initializes all weights/matrices in nn to be orthonormal
+            predict: makes averaged prediction of next state given a current state/action pair
+            plot_ensembles: makes a plot of training loss and testing loss with respect to epochs
+            save_model: saves model to a certain path location'''
+
     def __init__(self, nn_params, E = 5):
         super(EnsembleNN, self).__init__()
         self.E = E
@@ -32,41 +44,35 @@ class EnsembleNN(nn.Module):
         self.networks = []
         for i in range(self.E):
             self.networks.append(GeneralNN(nn_params))
-        self.scalarX = StandardScaler()# MinMaxScaler(feature_range=(-1,1))#StandardScaler()# RobustScaler()
-        self.scalarU = MinMaxScaler(feature_range=(-1,1))
-        self.scalardX = MinMaxScaler(feature_range=(-1,1)) #StandardScaler() #MinMaxScaler(feature_range=(-1,1))#StandardScaler() # RobustScaler(quantile_range=(25.0, 90.0))
-
 
     def train_cust(self, dataset, train_params, gradoff = False):
         #try splitting each nn to be trained on different segments of the dataset. This prevents any one of the nns to get overfitted and can better represents our data
         trainLoss = 0
         testLoss = 0
         length = dataset[0].shape[0]
-        setSize = length // self.E
-        trainingLoss = []
-        testingLoss = []
-        epochs = []
-        totalEpochs = train_params['epochs']
-        currEpochs = 5
-        train_params['epochs'] = 5
-        while (currEpochs <= totalEpochs):
-            for (i, net) in enumerate(self.networks):
-                #firstIndex = i*setSize
-                #endIndex = (i+1)*setSize
-                #input = (dataset[0][firstIndex:endIndex], dataset[1][firstIndex:endIndex], dataset[2][firstIndex:endIndex])
-                input = (dataset[0], dataset[1], dataset[2])
-                acctest, acctrain = net.train_cust(input, train_params, gradoff = True)
-                trainLoss += min(acctrain)/self.E
-                testLoss += min(acctest)/self.E
-            trainingLoss += [trainLoss]
-            testingLoss += [testLoss]
-            epochs += [currEpochs]
-            currEpochs += 5
-            trainLoss = 0
-            testLoss = 0
-        plt.plot(epochs, trainingLoss, 'r--', epochs, testingLoss, 'b--')
-        plt.show()
-        return testLoss, trainLoss
+        trainingLoss = np.zeros((self.E, train_params["epochs"]))
+        testingLoss = np.zeros((self.E, train_params["epochs"]))
+        lastEpoch = None
+        for (i, net) in enumerate(self.networks):
+            print("Training network number: ", i + 1)
+            acctest, acctrain = net.train_cust(dataset, train_params, gradoff = True)
+            trainingLoss[i,:len(acctrain)-1] = (np.asarray(acctrain[:-1]))
+            testingLoss[i,:len(acctrain)-1] = (np.asarray(acctest[:-1])) #averaging is done two lines down...no need to divide by self.E
+            if lastEpoch == None or len(acctrain) - 1 < lastEpoch:
+                lastEpoch = len(acctrain) - 1
+        trainingLoss = np.average(trainingLoss[:, :lastEpoch], axis = 0)
+        testingLoss = np.average(testingLoss[:, :lastEpoch], axis = 0)
+        #plot_ensembles(trainingLoss, testingLoss, train_params["epochs"])
+
+        minitrain = min(trainingLoss)
+        minitest = min(testingLoss)
+        minepoch = np.where(testingLoss == np.amin(testingLoss))[0][0]
+
+        print("")
+        print("Minimum training loss: ", min(trainingLoss))
+        print("Minimum testing loss: ", min(testingLoss))
+        print("Minimum epoch found: ", minepoch)
+        return minitest, minitrain, minepoch
 
     def init_weights_orth(self):
         for nn in self.networks:
@@ -79,6 +85,12 @@ class EnsembleNN(nn.Module):
             prediction += (1/self.E)*net.predict(X,U)
 
         return prediction
+
+    def plot_ensembles(self, trainingLoss, testingLoss, epochs):
+        eps = list(range(1, epochs + 1))
+        plt.plot(eps, trainingLoss, 'r--', eps, testingLoss, 'b--')
+        plt.show()
+        print("")
 
     def save_model(self, filepath):
         torch.save(self, filepath)

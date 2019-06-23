@@ -6,11 +6,19 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
+from pandas import ExcelWriter
+from pandas import ExcelFile
 
 from GenNN import GeneralNN
 from Parse import load_dirs, df_to_training
 from utils.nn import Swish
 from EnsembleNN import EnsembleNN
+from kMeansData import kClusters
+from collections import OrderedDict
+
+###############################################################################
+'''Loading and parsing data for model training. Setting training/nn parameters'''
 
 dir_list = ["data/c25_rand/",
             "data/c25_roll1/",
@@ -28,7 +36,7 @@ dir_list = ["data/c25_rand/",
             "data/c25_roll13/",
             "data/c25_roll14/",
             "data/c25_roll15/",]
-'''
+
 load_params ={
     'delta_state': True,                # normally leave as True, prediction mode
     'include_tplus1': True,             # when true, will include the time plus one in the dataframe (for trying predictions of true state vs delta)
@@ -64,14 +72,10 @@ data_params = {
                 'omega_x2', 'omega_y2', 'omega_z2',
                 'pitch2',   'roll2',    'yaw2',
                 'lina_x2',  'lina_y2',  'lina_z2'],
-                # 'omega_x3', 'omega_y3', 'omega_z3',
-                # 'pitch3',   'roll3',    'yaw3',
-                # 'lina_x3',  'lina_y3',  'lina_z3'],
 
     'inputs' : ['m1_pwm_0', 'm2_pwm_0', 'm3_pwm_0', 'm4_pwm_0',
                 'm1_pwm_1', 'm2_pwm_1', 'm3_pwm_1', 'm4_pwm_1',
-                'm1_pwm_2', 'm2_pwm_2', 'm3_pwm_2', 'm4_pwm_2'],# 'vbat'],
-                # 'm1_pwm_3', 'm2_pwm_3', 'm3_pwm_3', 'm4_pwm_3', 'vbat'],
+                'm1_pwm_2', 'm2_pwm_2', 'm3_pwm_2', 'm4_pwm_2'],
 
     'targets' : ['t1_omega_x', 't1_omega_y', 't1_omega_z',
                         'd_pitch', 'd_roll', 'd_yaw',
@@ -97,16 +101,20 @@ nn_params = {                           # all should be pretty self-explanatory
 }
 
 train_params = {
-    'epochs' : 35, #start at this # of epochs to find optimal epochs w/ respect to testerror
+    'epochs' : 300, #start at this # of epochs to find optimal epochs w/ respect to testerror
     'batch_size' : 18,
     'optim' : 'Adam',
-    'split' : 0.95,
-    'lr': .00175, # bayesian .00175, mse:  .0001
-    'lr_schedule' : [6,.7],
+    'split' : 0.8,
+    'lr': .002, # bayesian .00175, mse:  .0001
+    'lr_schedule' : [50,.85],
     'test_loss_fnc' : [],
     'preprocess' : True,
     'noprint' : False
 }
+
+###############################################################################
+'''TRAINING A MODEL AND SAVING IT TO A TXT FILE'''
+'''ALSO CONTAINS LINE TO TEST INERTIA WITH RESPECT TO # CLUSTERS'''
 
 #newNN = GeneralNN(nn_params)
 #newNN.init_weights_orth()
@@ -114,11 +122,76 @@ train_params = {
 #path = "TrainedDModel.txt"
 #newNN.save_model(path)
 
-ensembleNN = EnsembleNN(nn_params)
+'''ensembleNN = EnsembleNN(nn_params)
 ensembleNN.init_weights_orth()
-ensembleNN.train_cust((X, U, dX), train_params)
-path = "TrainedEnsembleModel2.txt"
+km = kClusters(9) #dummy number of clusters
+#km.plot([2, 20], (X,U,dX))
+km.cluster((X,U,dX))
+data = km.sample()
+print("Training networks in ensemble...")
+min, mini, epoch = ensembleNN.train_cust(data, train_params)
+print(min, mini, epoch)'''
+'''path = "TrainedEnsembleModel2.txt"
 ensembleNN.save_model(path)'''
+
+
+##############################################################################
+'''GRID SEARCH FOR FINDING OPTIMAL MODEL PARAMETERS'''
+'''Parameters tested: dropout, ensembles, step size, decay, batch size'''
+km = kClusters(9) #dummy number of clusters
+km.cluster((X,U,dX))
+data = km.sample()
+
+learnrate = [.0017, .0018, .0019, .002]
+dropout = [.05, .1, .15, .2, .25, .3, .35, .4, .45, .5]
+ensembles = [2, 3, 4, 5, 6]
+step = [5, 15, 25, 35, 45]
+decay = [.5, .55, .6, .65, .7, .75, .8, .85, .9]
+batch = [8, 16, 32]
+
+dict = {"Dropout": [2], "LR": [2], "Ensembles": [2], "Step": [2], "Decay": [2], "Batch": [2], "Epoch Mini": [2], "Minimum Loss": [2]}
+
+print("")
+print("Running Grid Search...")
+print("")
+count = 1
+for lr in learnrate:
+    train_params["lr"] = lr
+    for drop in dropout:
+        nn_params["dropout"] = drop
+        for e in ensembles:
+            nn_params["ensemble"] = e
+            for s in step:
+                for d in decay:
+                    train_params["lr_schedule"] = [s, d]
+                    for b in batch:
+                        train_params["batch_size"] = b
+                        print("")
+                        print("TRAINING ENSEMBLE NUMBER: ", count)
+                        print("")
+                        ensembleNN = EnsembleNN(nn_params)
+                        #ensembleNN.init_weights_orth()
+                        minitest, minitrain, epochs = ensembleNN.train_cust(data, train_params)
+                        dict["LR"] += [lr]
+                        dict["Dropout"] += [drop]
+                        dict["Ensembles"] += [e]
+                        dict["Step"] += [s]
+                        dict["Decay"] += [d]
+                        dict["Batch"] += [b]
+                        dict["Epoch Mini"] += [epochs]
+                        dict["Minimum Loss"] += [minitest]
+
+df = pd.DataFrame(OrderedDict(dict.items(), key = lambda t: len(t[0])))
+print("Saving data into excel...")
+writer = ExcelWriter('ParameterSweep.xlsx')
+df.to_excel(writer, 'Sheet1', index = False)
+writer.save()
+print("Excel saved")
+
+
+
+##############################################################################
+'''PROVIDING INITIAL CONDITIONS/INPUT FOR BAYESIAN OPTIMIZATION'''
 
 def getinput(model):
     load_params ={
@@ -156,14 +229,11 @@ def getinput(model):
                     'omega_x2', 'omega_y2', 'omega_z2',
                     'pitch2',   'roll2',    'yaw2',
                     'lina_x2',  'lina_y2',  'lina_z2'],
-                    # 'omega_x3', 'omega_y3', 'omega_z3',
-                    # 'pitch3',   'roll3',    'yaw3',
-                    # 'lina_x3',  'lina_y3',  'lina_z3'],
+
 
         'inputs' : ['m1_pwm_0', 'm2_pwm_0', 'm3_pwm_0', 'm4_pwm_0',
                     'm1_pwm_1', 'm2_pwm_1', 'm3_pwm_1', 'm4_pwm_1',
-                    'm1_pwm_2', 'm2_pwm_2', 'm3_pwm_2', 'm4_pwm_2'],# 'vbat'],
-                    # 'm1_pwm_3', 'm2_pwm_3', 'm3_pwm_3', 'm4_pwm_3', 'vbat'],
+                    'm1_pwm_2', 'm2_pwm_2', 'm3_pwm_2', 'm4_pwm_2'],
 
         'targets' : ['t1_omega_x', 't1_omega_y', 't1_omega_z',
                             'd_pitch', 'd_roll', 'd_yaw',

@@ -1,8 +1,3 @@
-#define the policy we are using
-#pass into the model that we are using
-#put that into our array of rolls, pitches etc.
-#plot the arrays of roll,pitches with respect to our time steps
-#remember we are operating at 25Hz at the moment
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
