@@ -24,4 +24,5 @@ PID:
   - PNNLoss: probabalistic loss of neural networks. Used to optimize ensemble/general neural network
   - Parse: parses data files from quadcopter to data frames workable with training models
   - TestRollouts: takes PID parameters and plots simulated rollouts based on train model to test stability
+  - kMeansData: Implements kMeans clustering on data points from quadcopter. Equally samples from each cluster to optimize model training
   - TrainedModels.txt: Various trained models used for bayesian optimization and rollout simulation
