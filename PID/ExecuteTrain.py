@@ -16,11 +16,13 @@ from utils.nn import Swish
 from EnsembleNN import EnsembleNN
 from kMeansData import kClusters
 from collections import OrderedDict
+import xlrd
+import ctypes
 
 ###############################################################################
 '''Loading and parsing data for model training. Setting training/nn parameters'''
 
-dir_list = ["data/c25_rand/",
+'''dir_list = ["data/c25_rand/",
             "data/c25_roll1/",
             "data/c25_roll2/",
             "data/c25_roll3/",
@@ -86,70 +88,98 @@ data_params = {
 
 X, U, dX = df_to_training(df, data_params)
 
-nn_params = {                           # all should be pretty self-explanatory
-    'dx' : np.shape(X)[1],
-    'du' : np.shape(U)[1],
-    'dt' : np.shape(dX)[1],
-    'hid_width' : 250,
-    'hid_depth' : 2,
-    'bayesian_flag' : True,
-    'activation': Swish(),
-    'dropout' : 0.2,
-    'split_flag' : False,
-    'pred_mode' : 'Delta State',
-    'ensemble' : 5
-}
+def getNewNNParams():
+    return {                           # all should be pretty self-explanatory
+        'dx' : np.shape(X)[1],
+        'du' : np.shape(U)[1],
+        'dt' : np.shape(dX)[1],
+        'hid_width' : 250,
+        'hid_depth' : 2,
+        'bayesian_flag' : True,
+        'activation': Swish(),
+        'dropout' : 0.2,
+        'split_flag' : False,
+        'pred_mode' : 'Delta State',
+        'ensemble' : 5
+    }
 
-train_params = {
-    'epochs' : 300, #start at this # of epochs to find optimal epochs w/ respect to testerror
-    'batch_size' : 18,
-    'optim' : 'Adam',
-    'split' : 0.8,
-    'lr': .002, # bayesian .00175, mse:  .0001
-    'lr_schedule' : [50,.85],
-    'test_loss_fnc' : [],
-    'preprocess' : True,
-    'noprint' : False
-}
+def getNewTrainParams():
+    return {
+        'epochs' : 300, #start at this # of epochs to find optimal epochs w/ respect to testerror
+        'batch_size' : 18,
+        'optim' : 'Adam',
+        'split' : 0.8,
+        'lr': .002, # bayesian .00175, mse:  .0001
+        'lr_schedule' : [50,.85],
+        'test_loss_fnc' : [],
+        'preprocess' : True,
+        'noprint' : False
+    }'''
+
 
 ###############################################################################
 '''TRAINING A MODEL AND SAVING IT TO A TXT FILE'''
 '''ALSO CONTAINS LINE TO TEST INERTIA WITH RESPECT TO # CLUSTERS'''
 
-#newNN = GeneralNN(nn_params)
-#newNN.init_weights_orth()
-#testLoss, trainLoss = newNN.train_cust((X, U, dX), train_params)
-#path = "TrainedDModel.txt"
-#newNN.save_model(path)
+ENSEMBLE = True
 
-'''ensembleNN = EnsembleNN(nn_params)
-ensembleNN.init_weights_orth()
 km = kClusters(9) #dummy number of clusters
 #km.plot([2, 20], (X,U,dX))
 km.cluster((X,U,dX))
 data = km.sample()
-print("Training networks in ensemble...")
-min, mini, epoch = ensembleNN.train_cust(data, train_params)
-print(min, mini, epoch)'''
-'''path = "TrainedEnsembleModel2.txt"
-ensembleNN.save_model(path)'''
+
+if ENSEMBLE:
+    ENSEMBLES = getNewNNParams()['ensemble']
+    dataPath = "ParameterSweep2.xlsx"
+    workbook = xlrd.open_workbook(dataPath)
+    sheet = workbook.sheet_by_index(0)
+    nn_params = []
+    train_params = []
+
+    for i in range(ENSEMBLES):
+        row = [cell.value for idx, cell in enumerate(sheet.row(i + 1))]
+        row = row[:-2] #don't include minimum loss and the key
+        eNNParams = getNewNNParams()
+        eTrainParams = getNewTrainParams()
+        eNNParams['dropout'] = row[0]
+        eTrainParams['lr'] = row[1]
+        eTrainParams['lr_schedule'] = [row[2], row[3]]
+        eTrainParams['batch_size'] = int(row[4])
+        eTrainParams['epochs'] = int(row[5])
+        nn_params.append(eNNParams)
+        train_params.append(eTrainParams)
+
+    ensembleNN = EnsembleNN(nn_params)
+    ensembleNN.init_weights_orth()
+    print("Training networks in ensemble...")
+    ensembleNN.train_cust(data, train_params)
+    path = "EnsembleModelOptimized.txt"
+    ensembleNN.save_model(path)
+else:
+    nn_params = [getNewNNParams()]
+    train_params = [getNewTrainParams()]
+    newNN = GeneralNN(nn_params[0])
+    newNN.init_weights_orth()
+    testLoss, trainLoss = newNN.train_cust(data, train_params[0])
+    path = "TrainedDModel.txt"
+    newNN.save_model(path)
+
 
 
 ##############################################################################
 '''GRID SEARCH FOR FINDING OPTIMAL MODEL PARAMETERS'''
 '''Parameters tested: dropout, ensembles, step size, decay, batch size'''
-km = kClusters(9) #dummy number of clusters
+'''km = kClusters(9) #dummy number of clusters
 km.cluster((X,U,dX))
 data = km.sample()
 
-learnrate = [.0017, .0018, .0019, .002]
+learnrate = [.0021, .0022]
 dropout = [.05, .1, .15, .2, .25, .3, .35, .4, .45, .5]
-ensembles = [2, 3, 4, 5, 6]
-step = [5, 15, 25, 35, 45]
-decay = [.5, .55, .6, .65, .7, .75, .8, .85, .9]
+step = [60, 75, 90]
+decay =[.75, .8, .85]
 batch = [8, 16, 32]
 
-dict = {"Dropout": [2], "LR": [2], "Ensembles": [2], "Step": [2], "Decay": [2], "Batch": [2], "Epoch Mini": [2], "Minimum Loss": [2]}
+dict = {"Dropout": [0], "LR": [0], "Step": [0], "Decay": [0], "Batch": [0], "Epoch Mini": [0], "Minimum Loss": [0]}
 
 print("")
 print("Running Grid Search...")
@@ -159,34 +189,37 @@ for lr in learnrate:
     train_params["lr"] = lr
     for drop in dropout:
         nn_params["dropout"] = drop
-        for e in ensembles:
-            nn_params["ensemble"] = e
-            for s in step:
-                for d in decay:
-                    train_params["lr_schedule"] = [s, d]
-                    for b in batch:
-                        train_params["batch_size"] = b
-                        print("")
-                        print("TRAINING ENSEMBLE NUMBER: ", count)
-                        print("")
-                        ensembleNN = EnsembleNN(nn_params)
-                        #ensembleNN.init_weights_orth()
-                        minitest, minitrain, epochs = ensembleNN.train_cust(data, train_params)
-                        dict["LR"] += [lr]
-                        dict["Dropout"] += [drop]
-                        dict["Ensembles"] += [e]
-                        dict["Step"] += [s]
-                        dict["Decay"] += [d]
-                        dict["Batch"] += [b]
-                        dict["Epoch Mini"] += [epochs]
-                        dict["Minimum Loss"] += [minitest]
+        for s in step:
+            for d in decay:
+                train_params["lr_schedule"] = [s, d]
+                for b in batch:
+                    train_params["batch_size"] = b
+                    print("")
+                    print("TRAINING ENSEMBLE NUMBER: ", count)
+                    print("")
+                    gen = GeneralNN(nn_params)
+                    #ensembleNN.init_weights_orth()
+                    minitest, minitrain = gen.train_cust(data, train_params)
+                    epochs = np.argmin(np.array(minitest))
+                    minitest = min(minitest)
+                    minitrain = min(minitrain)
+                    dict["LR"] += [lr]
+                    dict["Dropout"] += [drop]
+                    dict["Step"] += [s]
+                    dict["Decay"] += [d]
+                    dict["Batch"] += [b]
+                    dict["Epoch Mini"] += [epochs]
+                    dict["Minimum Loss"] += [minitest]
+                    count += 1
+
+                    print("Minimum Loss: ", minitest, " Epoch found: ", epochs)
 
 df = pd.DataFrame(OrderedDict(dict.items(), key = lambda t: len(t[0])))
 print("Saving data into excel...")
-writer = ExcelWriter('ParameterSweep.xlsx')
+writer = ExcelWriter('ParameterSweep2.xlsx')
 df.to_excel(writer, 'Sheet1', index = False)
 writer.save()
-print("Excel saved")
+print("Excel saved")'''
 
 
 

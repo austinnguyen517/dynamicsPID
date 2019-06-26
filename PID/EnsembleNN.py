@@ -40,39 +40,45 @@ class EnsembleNN(nn.Module):
     def __init__(self, nn_params, E = 5):
         super(EnsembleNN, self).__init__()
         self.E = E
-        self.prob = nn_params['bayesian_flag']
+        self.prob = nn_params[0]['bayesian_flag']
         self.networks = []
         for i in range(self.E):
-            self.networks.append(GeneralNN(nn_params))
+            self.networks.append(GeneralNN(nn_params[i]))
 
     def train_cust(self, dataset, train_params, gradoff = False):
-        #try splitting each nn to be trained on different segments of the dataset. This prevents any one of the nns to get overfitted and can better represents our data
-        trainLoss = 0
-        testLoss = 0
-        length = dataset[0].shape[0]
-        trainingLoss = np.zeros((self.E, train_params["epochs"]))
-        testingLoss = np.zeros((self.E, train_params["epochs"]))
+        TrTePairs = []
+        mintrain = []
+        mintest = []
         lastEpoch = None
+
         for (i, net) in enumerate(self.networks):
             print("Training network number: ", i + 1)
-            acctest, acctrain = net.train_cust(dataset, train_params, gradoff = True)
-            trainingLoss[i,:len(acctrain)-1] = (np.asarray(acctrain[:-1]))
-            testingLoss[i,:len(acctrain)-1] = (np.asarray(acctest[:-1])) #averaging is done two lines down...no need to divide by self.E
-            if lastEpoch == None or len(acctrain) - 1 < lastEpoch:
-                lastEpoch = len(acctrain) - 1
-        trainingLoss = np.average(trainingLoss[:, :lastEpoch], axis = 0)
-        testingLoss = np.average(testingLoss[:, :lastEpoch], axis = 0)
-        #plot_ensembles(trainingLoss, testingLoss, train_params["epochs"])
+            acctest, acctrain = net.train_cust(dataset, train_params[i], gradoff = True)
+            if acctrain[-1] == float('nan'): #get rid of the last number if it is Nan
+                TrTePairs += [[acctrain[:-1], acctest[:-1]]]
+                mintrain += [min(acctrain[:-1])]
+                mintest += [min(acctest[:-1])]
+            else:
+                TrTePairs += [[acctrain, acctest]]
+                mintrain += [min(acctrain)]
+                mintest += [min(acctest)]
+            print("Training stopped after: ", len(acctrain), " with min test loss of ", mintest[i])
+            print("")
 
-        minitrain = min(trainingLoss)
-        minitest = min(testingLoss)
-        minepoch = np.where(testingLoss == np.amin(testingLoss))[0][0]
-
+        #displaying the results
+        self.plot_ensembles(TrTePairs)
         print("")
-        print("Minimum training loss: ", min(trainingLoss))
-        print("Minimum testing loss: ", min(testingLoss))
-        print("Minimum epoch found: ", minepoch)
-        return minitest, minitrain, minepoch
+        print("")
+        print("RESULTS:")
+        for i in range(len(self.networks)):
+            print("Network number", i + 1, ":", " Minimum Testing Loss: ", mintest[i], " Minimum Training Loss: ", mintrain[i], " Epochs trained: ", len(TrTePairs[i][0]))
+        print("")
+        mintest = sum(mintest) / (len(mintest))
+        mintrain = sum(mintrain) / (len(mintrain))
+        print("Overall: Average testing loss: ", mintest, " Average training loss: ", mintrain)
+
+        return mintest, mintrain
+
 
     def init_weights_orth(self):
         for nn in self.networks:
@@ -86,11 +92,12 @@ class EnsembleNN(nn.Module):
 
         return prediction
 
-    def plot_ensembles(self, trainingLoss, testingLoss, epochs):
-        eps = list(range(1, epochs + 1))
-        plt.plot(eps, trainingLoss, 'r--', eps, testingLoss, 'b--')
-        plt.show()
-        print("")
+    def plot_ensembles(self, pairs):
+        for pair in pairs:
+            #training is 0, testing is 1
+            eps = list(range(1, len(pair[0]) + 1))
+            plt.plot(eps, pair[0], 'r--', eps, pair[1], 'b--')
+            plt.show()
 
     def save_model(self, filepath):
         torch.save(self, filepath)
