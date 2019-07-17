@@ -1,3 +1,5 @@
+'''Code from: Nathan Lambert'''
+
 import math
 import numpy as np
 import torch

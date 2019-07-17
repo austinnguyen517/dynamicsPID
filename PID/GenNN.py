@@ -1,3 +1,5 @@
+'''Inspiration and help from: Nathan Lambert'''
+
 # Import project files
 # from utils import *
 from utils.data import *
@@ -45,11 +47,11 @@ class GeneralNN(nn.Module):
         self.n_in = self.n_in_input + self.n_in_state
         self.n_out = nn_params['dt']
 
-        self.pred_mode = nn_params['pred_mode']
         self.activation = nn_params['activation']
         self.d = nn_params['dropout']
         self.split_flag = nn_params['split_flag']
 
+        self.epsilon = nn_params['epsilon']
         self.E = 0
 
         # Can store with a helper function for when re-loading and figuring out what was trained on
@@ -99,6 +101,8 @@ class GeneralNN(nn.Module):
         """
 
         x = self.features(x)
+        '''Added small epsilon value to possibly lower risk of NaN losses'''
+        x = torch.add(x, self.epsilon)
         return x
 
     def preprocess(self, dataset):# X, U):
@@ -180,6 +184,7 @@ class GeneralNN(nn.Module):
         lr_step_eps = train_params['lr_schedule'][0]
         lr_step_ratio = train_params['lr_schedule'][1]
         preprocess = train_params['preprocess']
+        momentum = train_params['momentum']
 
         if preprocess:
             dataset = self.preprocess(dataset)#[0], dataset[1])
@@ -202,6 +207,8 @@ class GeneralNN(nn.Module):
         # Papers seem to say ADAM works better
         if(optim=="Adam"):
             optimizer = torch.optim.Adam(super(GeneralNN, self).parameters(), lr=lr)
+        elif (optim == 'SGD'):
+            optimizer = torch.optim.SGD(super(GeneralNN, self).parameters(), lr = lr, momentum = momentum)
         else:
             raise ValueError(optim + " is not a valid optimizer type")
 
@@ -212,9 +219,10 @@ class GeneralNN(nn.Module):
 
     def predict(self, X, U):
         """
-        Given a state X and input U, predict the change in state dX. This function is used when simulating, so it does all pre and post processing for the neural net
+        Given a state X and input U, predict the next state. This function is used when simulating, so it does all pre and post processing for the neural net
         """
         dx = len(X)
+        self.eval()
 
         #normalizing and converting to single sample
         normX = self.scalarX.transform(X.reshape(1, -1))
@@ -222,11 +230,13 @@ class GeneralNN(nn.Module):
 
 
         input = torch.Tensor(np.concatenate((normX, normU), axis=1))
-
         NNout = self.forward(input).data[0]
         # If probablistic only takes the first half of the outputs for predictions
+        '''Implement more generality. This returns means and variance if it is probabilistic but only returns mean if deterministic.'''
         if self.prob:
-            NNout = self.postprocess(NNout[:int(self.n_out/2)]).ravel()
+            mean = self.postprocess(NNout[:int(self.n_out/2)]).ravel()
+            var = NNout[int(self.n_out/2):]
+            return mean,var
         else:
             NNout = self.postprocess(NNout).ravel()
 
@@ -241,10 +251,10 @@ class GeneralNN(nn.Module):
         trainLoader = DataLoader(dataset[:int(split*len(dataset))], batch_size=batch_size, shuffle=True)
 
         for epoch in range(epochs):
+            self.train()
             scheduler.step()
             avg_loss = torch.zeros(1)
             num_batches = len(trainLoader)/batch_size
-            self.features.train()
             for i, (input, target) in enumerate(trainLoader):
                 optim.zero_grad()
                 output = self.forward(input).float()
@@ -260,15 +270,14 @@ class GeneralNN(nn.Module):
                     # print(loss)
                     # print(lambda_logvar * torch.sum((self.max_logvar)))
                     loss += lambda_logvar * torch.sum((self.max_logvar)) - lambda_logvar * torch.sum((self.min_logvar))
-
                 if loss.data.numpy() == loss.data.numpy():
                     # print(self.max_logvar, self.min_logvar)
                     if not gradoff:
                         loss.backward()                               # backpropagate from the loss to fill the gradient buffers
                         optim.step()                                  # do a gradient descent step
                     # print('tain: ', loss.item())
-                # if not loss.data.numpy() == loss.data.numpy(): # Some errors make the loss NaN. this is a problem.
                 else:
+                    '''TODO: implement a reset in neural network state dicts and variables so that when we have NaN, just start over and retrain the network on the same parameters'''
                     print("loss is NaN")                       # This is helpful: it'll catch that when it happens,
                     print("Stopping training at ", epoch, " epochs.")
                     # print("Output: ", output, "\nInput: ", input, "\nLoss: ", loss)
@@ -278,7 +287,7 @@ class GeneralNN(nn.Module):
                 avg_loss += (loss.item()/(len(trainLoader)*batch_size))
                 '''Editted to return list of losses every epoch'''# update the overall average loss with this batch's loss
 
-            self.features.eval()
+            self.eval()
             test_error = torch.zeros(1)
             for i, (input, target) in enumerate(testLoader):
 
@@ -290,7 +299,7 @@ class GeneralNN(nn.Module):
                     loss = loss_fn(output, target)
                 test_error += loss.item()/(len(testLoader)*batch_size)
             test_error = test_error
-
+            #print("Look for increase in loss here:", avg_loss[0])
             #if (epoch % 1 == 0): print("Epoch:", '%04d' % (epoch + 1), "train loss=", "{:.6f}".format(avg_loss.data[0]), "test loss=", "{:.6f}".format(test_error.data[0]))
             error_train.append(avg_loss[0].tolist())
             errors.append(test_error[0].tolist())

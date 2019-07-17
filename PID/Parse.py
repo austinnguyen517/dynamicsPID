@@ -1,3 +1,5 @@
+'''Code from: Nathan Lambert'''
+
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from datetime import datetime

@@ -19,6 +19,7 @@ from sklearn import linear_model
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, QuantileTransformer
 import pickle
 from sklearn.model_selection import KFold   # for dataset
+from kMeansData import kClusters
 
 
 from PNNLoss import PNNLoss_Gaussian
@@ -39,21 +40,49 @@ class EnsembleNN(nn.Module):
 
     def __init__(self, nn_params, E = 5):
         super(EnsembleNN, self).__init__()
+        '''Lacks generality since we assume that each of the networks are trained'''
         self.E = E
         self.prob = nn_params[0]['bayesian_flag']
         self.networks = []
+        self.n_in_input = nn_params[0]['du']
+        self.n_in_state = nn_params[0]['dx']
+        self.n_in = self.n_in_input + self.n_in_state
+        self.n_out = nn_params[0]['dt']
+        if self.prob:
+            self.n_out = self.n_out * 2
+        self.stack = nn_params[0]['stack']
         for i in range(self.E):
             self.networks.append(GeneralNN(nn_params[i]))
+        self.epsilon = nn_params[0]['epsilon']
 
-    def train_cust(self, dataset, train_params, gradoff = False):
+
+    def train_cust(self, dataset, train_params, cluster = False, gradoff = False):
+        print("")
+        if cluster:
+            print("")
+            print("Clustering...")
+            km = kClusters(min(np.shape(dataset[0])[0],9)) #dummy number of clusters
+            #km.plot([2, 20], (X,U,dX))
+            km.cluster(dataset)
+            dataset, leftover = km.sample() #shuffling is handled in GeneralNN training loader...only shuffles the training data so the split is safe.
+            lenTrain = len(dataset)
+            lenTest = len(leftover)
+            for dict in train_params:
+                dict["split"] =lenTrain / (lenTrain + lenTest)
+                print("Used a split ratio of: ", lenTrain / (lenTrain + lenTest))
+            print("")
+            dataset = np.vstack((dataset, leftover))
+            dataset = ((dataset[:, :36], dataset[:, 36:48], dataset[:, 48:]))
         TrTePairs = []
         mintrain = []
         mintest = []
         lastEpoch = None
 
+        '''Training each of the neural networks on the same dataset with different parameters'''
+
         for (i, net) in enumerate(self.networks):
-            print("Training network number: ", i + 1)
-            acctest, acctrain = net.train_cust(dataset, train_params[i], gradoff = True)
+            #print("Training network number: ", i + 1)
+            acctest, acctrain = net.train_cust(dataset, train_params[i], gradoff = False)
             if acctrain[-1] == float('nan'): #get rid of the last number if it is Nan
                 TrTePairs += [[acctrain[:-1], acctest[:-1]]]
                 mintrain += [min(acctrain[:-1])]
@@ -62,12 +91,13 @@ class EnsembleNN(nn.Module):
                 TrTePairs += [[acctrain, acctest]]
                 mintrain += [min(acctrain)]
                 mintest += [min(acctest)]
-            print("Training stopped after: ", len(acctrain), " with min test loss of ", mintest[i])
-            print("")
+            #print("Training stopped after: ", len(acctrain), " with min test loss of ", mintest[i])
+            #print("")
 
-        #displaying the results
-        self.plot_ensembles(TrTePairs)
-        print("")
+        '''Displaying the results'''
+
+        #self.plot_ensembles(TrTePairs)
+        #print("")
         print("")
         print("RESULTS:")
         for i in range(len(self.networks)):
@@ -85,12 +115,14 @@ class EnsembleNN(nn.Module):
             nn.init_weights_orth()
 
     def predict(self, X, U):
-        prediction = np.zeros([9])
+        prediction = np.zeros((len(X), self.networks[0].n_out))
 
         for net in self.networks:
-            prediction += (1/self.E)*net.predict(X,U)
+            for i in range(len(X)):
+                mean, var = (net.predict(X[i, :], U[i, :]))
+                prediction [i, :] += ((1/self.E) * np.hstack((mean,var)))
 
-        return prediction
+        return prediction + self.epsilon #adding it because our training included this epsilon
 
     def plot_ensembles(self, pairs):
         for pair in pairs:
@@ -101,4 +133,5 @@ class EnsembleNN(nn.Module):
 
     def save_model(self, filepath):
         torch.save(self, filepath)
+        print("")
         print("EnsembleModel has been saved to" + filepath)
