@@ -41,5 +41,4 @@ All files can be found in folder: PID
   ### Testing:
   - CrazyFlieSim: true simulation of quadcopter dynamics 
   - TestRollouts: takes PID parameters and plots simulated rollouts based on train model to test stability
-
   - TrainedModels.txt: Various trained models used for bayesian optimization and rollout simulation
