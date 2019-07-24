@@ -32,7 +32,7 @@ class PID():
 
         self.error_prev = self.error
 
-        self.error = self.desired - measured
+        self.error = measured - self.desired
         self.out += self.kp*self.error
 
         self.deriv = (self.error-self.error_prev) / self.dt

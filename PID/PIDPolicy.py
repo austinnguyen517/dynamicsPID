@@ -21,9 +21,16 @@ class policy():
         self.max_pwm = max_pwm
         self.equil = equil
         self.dt = dt
-        #order: pitch, roll, yaw, pitchrate, rollrate, yawRate
-        assert len(parameters) == 18
-        self.numPIDs = 6
+        self.numParameters = 0
+        #order: pitch, roll, yaw, pitchrate, rollrate, yawRate or pitch roll yaw yawrate for hybrid or pitch roll yaw for euler
+        if self.mode == 'EULER':
+            self.numParameters = 9
+        elif self.mode == 'HYBRID':
+            self.numParameters = 12
+        elif self.mode == 'RATE' or self.mode == 'ALL':
+            self.numParameters = 18
+        assert len(parameters) == self.numParameters
+        self.numPIDs =int(self.numParameters / 3)
 
         for i in [3 * i for i in list(range(self.numPIDs))]:
             self.PID += [PID(0, parameters[i], parameters[i + 1], parameters[i + 2], 0, self.dt)]
@@ -34,23 +41,29 @@ class policy():
             return np.clip(PWM, self.min_pwm, self.max_pwm)
         output = torch.zeros(1,4).float()
         if self.mode == 'EULER':
-            output[0][0] = limit_thrust(self.equil[0] + self.PID[0].out + self.PID[2].out)
-            output[0][1] = limit_thrust(self.equil[1] - self.PID[1].out - self.PID[2].out)
-            output[0][2] = limit_thrust(self.equil[2] - self.PID[0].out + self.PID[2].out)
-            output[0][3] = limit_thrust(self.equil[3] + self.PID[1].out - self.PID[2].out)
+            output[0][0] = limit_thrust(self.equil[0] + self.PID[0].out - self.PID[1].out + self.PID[2].out)
+            output[0][1] = limit_thrust(self.equil[1] - self.PID[0].out - self.PID[1].out - self.PID[2].out)
+            output[0][2] = limit_thrust(self.equil[2] - self.PID[0].out + self.PID[1].out + self.PID[2].out)
+            output[0][3] = limit_thrust(self.equil[3] + self.PID[0].out + self.PID[1].out - self.PID[2].out)
         if self.mode == 'HYBRID':
-            output[0][0] = limit_thrust(self.equil[0] + self.PID[0].out + self.PID[5].out)
-            output[0][1] = limit_thrust(self.equil[1] - self.PID[1].out - self.PID[5].out)
-            output[0][2] = limit_thrust(self.equil[2] - self.PID[0].out + self.PID[5].out)
-            output[0][3] = limit_thrust(self.equil[3] + self.PID[1].out - self.PID[5].out)
+            output[0][0] = limit_thrust(self.equil[0] + self.PID[0].out - self.PID[1].out + self.PID[5].out)
+            output[0][1] = limit_thrust(self.equil[1] - self.PID[0].out - self.PID[1].out - self.PID[5].out)
+            output[0][2] = limit_thrust(self.equil[2] - self.PID[0].out + self.PID[1].out + self.PID[5].out)
+            output[0][3] = limit_thrust(self.equil[3] + self.PID[0].out + self.PID[1].out - self.PID[5].out)
         if self.mode == 'RATE':
-            output[0][0] = limit_thrust(self.equil[0] + self.PID[3].out + self.PID[5].out)
-            output[0][1] = limit_thrust(self.equil[1] - self.PID[4].out - self.PID[5].out)
-            output[0][2] = limit_thrust(self.equil[2] - self.PID[3].out + self.PID[5].out)
-            output[0][3] = limit_thrust(self.equil[3] + self.PID[4].out - self.PID[5].out)
+            output[0][0] = limit_thrust(self.equil[0] + self.PID[3].out - self.PID[4].out + self.PID[5].out)
+            output[0][1] = limit_thrust(self.equil[1] - self.PID[3].out - self.PID[4].out - self.PID[5].out)
+            output[0][2] = limit_thrust(self.equil[2] - self.PID[3].out + self.PID[4].out + self.PID[5].out)
+            output[0][3] = limit_thrust(self.equil[3] + self.PID[3].out + self.PID[4].out - self.PID[5].out)
+        if self.mode == 'ALL': 
+            output[0][0] = limit_thrust(self.equil[0] + self.PID[0].out - self.PID[1].out + self.PID[2].out + self.PID[3].out - self.PID[4].out + self.PID[5].out)
+            output[0][1] = limit_thrust(self.equil[1] - self.PID[0].out - self.PID[1].out - self.PID[2].out - self.PID[3].out - self.PID[4].out - self.PID[5].out)
+            output[0][2] = limit_thrust(self.equil[2] - self.PID[0].out + self.PID[1].out + self.PID[2].out - self.PID[3].out + self.PID[4].out + self.PID[5].out)
+            output[0][3] = limit_thrust(self.equil[3] + self.PID[0].out + self.PID[1].out - self.PID[2].out + self.PID[3].out + self.PID[4].out - self.PID[5].out)
         return output[0]
 
     def update(self, states):
+        '''Order of states being passed: pitch, roll, yaw'''
         assert len(states) == 3
         EulerOut = [0,0,0]
         for i in range(3):

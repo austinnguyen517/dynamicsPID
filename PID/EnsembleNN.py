@@ -57,7 +57,7 @@ class EnsembleNN(nn.Module):
 
 
     def train_cust(self, dataset, train_params, cluster = False, gradoff = False):
-        print("")
+        #print("")
         if cluster:
             print("")
             print("Clustering...")
@@ -98,11 +98,11 @@ class EnsembleNN(nn.Module):
 
         #self.plot_ensembles(TrTePairs)
         #print("")
-        print("")
-        print("RESULTS:")
-        for i in range(len(self.networks)):
-            print("Network number", i + 1, ":", " Minimum Testing Loss: ", mintest[i], " Minimum Training Loss: ", mintrain[i], " Epochs trained: ", len(TrTePairs[i][0]))
-        print("")
+        #print("")
+        #print("RESULTS:")
+        #for i in range(len(self.networks)):
+            #print("Network number", i + 1, ":", " Minimum Testing Loss: ", mintest[i], " Minimum Training Loss: ", mintrain[i], " Epochs trained: ", len(TrTePairs[i][0]))
+        #print("")
         mintest = sum(mintest) / (len(mintest))
         mintrain = sum(mintrain) / (len(mintrain))
         print("Overall: Average testing loss: ", mintest, " Average training loss: ", mintrain)
@@ -122,7 +122,7 @@ class EnsembleNN(nn.Module):
                 mean, var = (net.predict(X[i, :], U[i, :]))
                 prediction [i, :] += ((1/self.E) * np.hstack((mean,var)))
 
-        return prediction + self.epsilon #adding it because our training included this epsilon
+        return prediction #+ self.epsilon #adding it because our training included this epsilon
 
     def plot_ensembles(self, pairs):
         for pair in pairs:
@@ -134,4 +134,4 @@ class EnsembleNN(nn.Module):
     def save_model(self, filepath):
         torch.save(self, filepath)
         print("")
-        print("EnsembleModel has been saved to" + filepath)
+        print("EnsembleModel has been saved to " + filepath)

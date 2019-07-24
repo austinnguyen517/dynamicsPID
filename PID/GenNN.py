@@ -101,8 +101,12 @@ class GeneralNN(nn.Module):
         """
 
         x = self.features(x)
-        '''Added small epsilon value to possibly lower risk of NaN losses'''
-        x = torch.add(x, self.epsilon)
+        #pick out the variances, sigmoid, then apply scalar mult so that they aren't too high!
+        if not self.prob:
+            return x
+        cutoff = int(self.n_out/2)
+        var = .01/(1 + (x.narrow(1, cutoff, cutoff)).exp())
+        x = torch.cat((x.narrow(1,0,cutoff), var), 1 )
         return x
 
     def preprocess(self, dataset):# X, U):
@@ -185,7 +189,7 @@ class GeneralNN(nn.Module):
         lr_step_ratio = train_params['lr_schedule'][1]
         preprocess = train_params['preprocess']
         momentum = train_params['momentum']
-
+        self.train()
         if preprocess:
             dataset = self.preprocess(dataset)#[0], dataset[1])
             # print('Shape of dataset is:', len(dataset))

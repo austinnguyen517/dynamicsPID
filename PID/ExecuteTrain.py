@@ -91,16 +91,16 @@ X, U, dX = df_to_training(df, data_params)
 
 def getNewNNParams():
     return {                           # all should be pretty self-explanatory
-        'dx' : np.shape(X)[1],
-        'du' : np.shape(U)[1],
-        'dt' : np.shape(dX)[1],
+        'dx' : 9,
+        'du' : 4,
+        'dt' : 9,
         'hid_width' : 250,
-        'hid_depth' : 3,
+        'hid_depth' : 2,
         'bayesian_flag' : True,
         'activation': Swish(),
         'dropout' : 0.2,
         'split_flag' : False,
-        'stack': load_params['stack_states'],
+        'stack': 1,
         'ensemble' : 5,
         'epsilon': 2.2e-100
     }
@@ -224,7 +224,7 @@ def getOptimalNNTrainParams(includePosition, lr = None, epochs = None):
         eTrainParams['lr_schedule'] = [row[2], row[3]]
         eTrainParams['batch_size'] = int(row[4])
         eTrainParams['epochs'] = epochs or int(row[5]) #chaned to 5 since cycle is running
-        numStack = int(eNNParams['dx']/9)
+        numStack = eNNParams['stack']
         if includePosition:
             eNNParams['dx'] += 3 * numStack
             eNNParams['dt'] += 3
@@ -242,26 +242,31 @@ def getInput(model):
     return X, U
 
 ###############################################################################
-'''PROVIDE A LIST OF INITIAL STATES (NO STACKING) FOR SIMULATION'''
+'''FOR SIMULATION'''
+
+def degToRad(states):
+    '''Takes in state(s) and converts euler angles and omegas from degrees to radians'''
+    angles = states[:, 6:9]
+    omegas = states[:, 9:12]
+    states[:,6:9] = np.radians(angles)
+    states[:,9:12] = np.radians(omegas)
+    return states
+
+def radToDeg(states):
+    '''Takes in state(s) and converts euler angles and omegas from radians to degrees'''
+    angles = states[:,6:9]
+    omegas = states[:, 9:12]
+    states[:,6:9] = np.degrees(angles)
+    states[:,9:12] = np.degrees(omegas)
+    return states
+
 def getState():
-    load_params["stack_states"] = 1
-    df = load_dirs(dir_list, load_params)
-    data_params = {
-        # Note the order of these matters. that is the order your array will be in
-        'states' : ['omega_x0', 'omega_y0', 'omega_z0',
-                    'pitch0',   'roll0',    'yaw0',
-                    'lina_x0',  'lina_y0',  'lina_z0'],
-
-        'inputs' : ['m1_pwm_0', 'm2_pwm_0', 'm3_pwm_0', 'm4_pwm_0'],
-
-        'targets' : ['t1_omega_x', 't1_omega_y', 't1_omega_z',
-                            'd_pitch', 'd_roll', 'd_yaw',
-                            't1_lina_x', 't1_lina_y', 't1_lina_z'],
-
-        'battery' : True                    # Need to include battery here too
-    }
-    X,U,dX = df_to_training(df, data_params)
-    zeros = np.zeros(((np.shape(X))[0], 2))
-    z = np.random.rand((np.shape(X))[0], 1) * 30
-    X = np.hstack((zeros, z, X))
+    size = 100
+    xy = np.zeros((size, 2))
+    z = np.random.rand(size, 1) * 20
+    #for the velocities, make them range <.1 as well
+    v = np.random.rand(size, 3) * .1
+    #euler angles and velocities can be random with values <.3
+    angles = np.random.rand(size, 6) * .3
+    X = np.hstack((xy, z, v, angles))
     return X
