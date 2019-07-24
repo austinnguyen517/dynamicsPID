@@ -10,12 +10,6 @@ All files can be found in folder: PID
   
   Graphs: Visual representations of results from rollouts, PID parameter search, and model training. Contains all graphs throughout optimization and tuning process
   
-  ### Out of date/Faulty implementation files:
-  - DynamicsModel.py
-  - ExecuteSim.py
-  - ExpectedImprovement.py 
-  - PIDSearch.py
-  
   ## File Descriptions:
   
   ### Wrappers/Fundamental Research Files:
@@ -40,5 +34,5 @@ All files can be found in folder: PID
   
   ### Testing:
   - CrazyFlieSim: true simulation of quadcopter dynamics 
-  - TestRollouts: takes PID parameters and plots simulated rollouts based on train model to test stability
+  - ExecuteSim: execute simulation to test fitness of PID parameters and policy
   - TrainedModels.txt: Various trained models used for bayesian optimization and rollout simulation
