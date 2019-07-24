@@ -3,6 +3,8 @@
 - Implementation of bayesian optimization to find optimal PID parameters using expected improvement acquisition function
 - Searching for optimal training parameters for ensemble neural network modeling dynamics of ionocraft 
 - Graphs of predicted rollouts, training/testing loss of model with respect to epochs and loss gradients with respect to PID parameters
+- Incorporation of simulation and visualization to test fitness of PID parameters
+- Wrapping all stages (Bayesian optimization, data, model training, and simulation) to generate PID parameters
 
 All files can be found in folder: PID
 
