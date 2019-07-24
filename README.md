@@ -3,18 +3,14 @@
 - Implementation of bayesian optimization to find optimal PID parameters using expected improvement acquisition function
 - Searching for optimal training parameters for ensemble neural network modeling dynamics of ionocraft 
 - Graphs of predicted rollouts, training/testing loss of model with respect to epochs and loss gradients with respect to PID parameters
+- Incorporation of simulation and visualization to test fitness of PID parameters
+- Wrapping all stages (Bayesian optimization, data, model training, and simulation) to generate PID parameters
 
 All files can be found in folder: PID
 
 ## PID:
   
   Graphs: Visual representations of results from rollouts, PID parameter search, and model training. Contains all graphs throughout optimization and tuning process
-  
-  ### Out of date/Faulty implementation files:
-  - DynamicsModel.py
-  - ExecuteSim.py
-  - ExpectedImprovement.py 
-  - PIDSearch.py
   
   ## File Descriptions:
   
@@ -40,5 +36,5 @@ All files can be found in folder: PID
   
   ### Testing:
   - CrazyFlieSim: true simulation of quadcopter dynamics 
-  - TestRollouts: takes PID parameters and plots simulated rollouts based on train model to test stability
+  - ExecuteSim: execute simulation to test fitness of PID parameters and policy
   - TrainedModels.txt: Various trained models used for bayesian optimization and rollout simulation
