@@ -36,5 +36,6 @@ All files can be found in folder: PID
   
   ### Testing:
   - CrazyFlieSim: true simulation of quadcopter dynamics 
+  - Initial: provides initial conditions for simulation
   - ExecuteSim: execute simulation to test fitness of PID parameters and policy
   - TrainedModels.txt: Various trained models used for bayesian optimization and rollout simulation
