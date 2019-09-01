@@ -1,3 +1,5 @@
+'''Austin Nguyen'''
+
 '''Visualizer for quadcopter. Runs no policy directly. Only a GUI for the user to analyze results.
 
 All quadcopter states are computed elsewhere (for example in CrazyFlieSim.py)'''

@@ -1,4 +1,4 @@
-'''Code from: Nathan Lambert'''
+'''Collaborators: Nathan Lambert'''
 
 import numpy as np
 import math

@@ -1,4 +1,4 @@
-'''Inspiration and help from: Nathan Lambert'''
+'''Collaborators: Nathan Lambert'''
 
 # Import project files
 # from utils import *

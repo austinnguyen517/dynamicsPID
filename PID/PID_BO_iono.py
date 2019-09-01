@@ -1,3 +1,5 @@
+'''Austin Nguyen '''
+
 import opto
 import opto.data as rdata
 from opto.opto.classes.OptTask import OptTask
@@ -85,7 +87,7 @@ class BOPID():
         best = log.get_best_parameters()
         bestLoss = log.get_best_objectives()
         nEvals = log.get_n_evals()
-        best = [matrix.tolist() for matrix in best] #can be a buggy line 
+        best = [matrix.tolist() for matrix in best] #can be a buggy line
 
         if printResults:
             print("Best PID parameters found with loss of: ", np.amin(bestLoss), " in ", nEvals, " evaluations.")

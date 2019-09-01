@@ -1,3 +1,5 @@
+'''Austin Nguyen'''
+
 '''Class to represent a PID policy
 
 Has a bunch of different "branches" to distinguish the different kinds of policies we can make with PID outputs

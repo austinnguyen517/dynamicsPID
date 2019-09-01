@@ -1,3 +1,5 @@
+'''Collaborators: Nathan Lambert'''
+
 '''PID class to help implement PID policy'''
 
 import numpy as np

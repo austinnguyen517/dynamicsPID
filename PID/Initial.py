@@ -1,3 +1,5 @@
+'''Austin Nguyen'''
+
 '''Functions to import initial conditions or parameters'''
 
 '''Reads from excel file the optimal nn_params and train_params. Returns two respective lists '''

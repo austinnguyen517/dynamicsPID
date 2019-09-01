@@ -1,3 +1,5 @@
+'''Collaborators: Nathan Lambert'''
+
 import pickle
 import numpy as np
 from GenNN import GeneralNN

@@ -1,3 +1,5 @@
+'''Austin Nguyen'''
+
 '''Class analyzes trends in a given dataset and returns additional data based on rewards we want to acknowledge
 
 Time: reward rollouts that had a long flight time above a certain threshold
@@ -201,7 +203,7 @@ class Analysis():
         return (extra[:, :endStates], extra[:, endStates: endStates + endInputs], extra[: ,endStates + endInputs: endStates + endInputs + endOutputs])
 
     def rewardOvershoot(self):
-        #checking the max angle reached before settling down 
+        #checking the max angle reached before settling down
         result = []
         for i in range(len(self.settleTimes)):
             start = self.offsets[i]

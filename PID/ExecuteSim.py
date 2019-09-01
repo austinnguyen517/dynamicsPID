@@ -1,3 +1,5 @@
+'''Austin Nguyen'''
+
 '''Wrapper function that takes inputs of PID parameters, creates a policy, and runs a simulation with visuals on the policy.
    All simulations are based on outputs from CrazyFlieSim.py and noise can be added if need be. '''
 
