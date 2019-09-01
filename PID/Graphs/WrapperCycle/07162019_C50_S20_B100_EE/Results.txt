@@ -1,0 +1,15 @@
+Total Cycles: 50	BOIterations: 30	Epochs: 3	SimFlights: 5
+Policy Mode: EULER	BO Objective:EULER
+Min Sim Loss: .6510	At cycle 8
+Min modTestLoss: -17.56 At cycle 50
+Min trainLoss: -17.624  At cycle 50
+Min BO Obj Loss: .0216	At cycle 33
+
+Best performing PID values in terms of simulator fitness found at cycle 8
+
+Pitch Prop: 250		Int: 250	Deriv: 4.17
+Roll  Prop: 2.33	Int: 161.37	Deriv: 2.95
+Yaw   Prop: 250		Int: 250	Deriv: 5
+PRate Prop: 250		Int: 250	Deriv: 5
+RRate Prop: 250		Int: 127.44	Deriv: 5
+YRate Prop: 1.15e-10	Int: 250	Deriv: 5

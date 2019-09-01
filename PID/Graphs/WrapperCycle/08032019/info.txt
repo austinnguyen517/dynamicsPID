@@ -1,0 +1,14 @@
+Total Cycles:  30    BOIterations:  150     Epochs:  5       SimFlights:  3
+Policy mode:  EULER  BO Objective:  EULER
+Max average simulation flight time:  1500.0  found at cycle number:  21  with loss of  0.24513121616827682
+Minimum model test loss:  -1.6277546882629395  found at cycle number:  24
+Minimum model train loss:  -0.9202135801315308 found at cycle number:  21
+Minimum BO objective loss:  0.0 found at cycle number  1
+
+Linear Regression on BO objective loss vs Flight Simulation Time had slope:  -4125.750483354363  intercept:  2297.372593676645  and r value of  -0.29371682087313117
+
+Best performing PID values in terms of simulator fitness from cycle number  21 :
+
+Pitch:   Prop:  299.99985840850945  Int:  3.182209639253051e-06  Deriv:  2.3965511943209723
+Roll:    Prop:  299.9999998886622  Int:  99.99995948385862  Deriv:  16.407283980376008
+Yaw:     Prop:  299.9999999742663  Int:  7.323874203745798e-06  Deriv:  19.67647672510362

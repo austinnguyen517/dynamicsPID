@@ -1,0 +1,24 @@
+Cycles: 15	BOIterations: 100	Epochs: 5	SimFlights: 15
+PolicyMode: Euler	BOObjective: Euler
+Max average sim flight time: 1000 at cycle 5 with loss of 213.414/(~540)
+Minimum model test loss: -41.98 at cycle 13
+Minimum model train loss: -40.16 at cycle 13
+Min BO objective loss: .3927 at cycle 2
+
+Linear Regression on BO objective loss vs Flight sim time:
+	Slope: 448.35
+	Intercept 14423.89
+	R: .011 
+
+Best PID values with respect to simulator fitness found at cycle 5:
+
+Pitch: P: 162.4553068437353	I: 92.33729041600824	D: .89670033561082
+Roll:  P: 168.51970708675145	I: 104.62663226974074	D: 2.316215840641
+Yaw:   P: 167.76854190354715	I: 99.82218564660144	D: 4.3133254181221	
+
+Notes/Remarks:
+- BO iterations only reached 128 at max 
+- Mistakes in code precluded from getting other graphs/visual results
+- Learning rate of .0001 was held constant (no decay)
+- Only sampled 1000 points from each simulation run
+- When plugged back into simulator, the PID parameters run decently, but the yaw slowly turns and checks out
