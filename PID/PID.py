@@ -1,3 +1,5 @@
+'''PID class to help implement PID policy'''
+
 import numpy as np
 
 class PID():
@@ -5,49 +7,51 @@ class PID():
                     kp, ki, kd,
                     ilimit, dt, outlimit = np.inf,
                     samplingRate = 0, cutoffFreq = -1,
-                    enableDFilter = False):
+                    enableDFilter = False, memory = 5):
 
-        self.error = 0
-        self.error_prev = 0
-        self.integral = 0
-        self.deriv = 0
-        self.out = 0
+        self.error = 0 #proportional error
+        self.error_prev = [0 for i in range(memory)] #keeps track of previous errors length memory
+        self.integral = 0 #integral error
+        self.deriv = 0 #derivative error
+        self.out = 0 #output of PID
+        self.bias = 1e-5
+        self.memory = memory
 
-        self.desired = desired
+        self.desired = desired #goal parameter to base errors off of
+
+        #PID parameters
         self.kp = kp
         self.ki = ki
         self.kd = kd
 
-        self.ilimit = ilimit
-        self.outlimit = outlimit
+        self.ilimit = ilimit  #Integral error limit
+        self.outlimit = outlimit #Output error limit
 
-        # timee steps for changing step size of PID response
+        # time steps for changing step size of PID response
         self.dt = dt
-        self.samplingRate = samplingRate    # sample rate is for filtering
-
-        self.cutoffFreq = cutoffFreq
 
     def update(self, measured):
-        self.out = 0.
+        self.out = 0 #reset the output
 
-        self.error_prev = self.error
+        self.error_prev = self.error_prev[1:] + [self.error] #update the previous error
 
+        #proportional error
         self.error = measured - self.desired
         self.out += self.kp*self.error
 
-        self.deriv = (self.error-self.error_prev) / self.dt
+        #derivative error
+        self.deriv = (self.error-self.error_prev[self.memory - 1]) / self.dt
         self.out += self.deriv*self.kd
 
-        self.integral = self.error*self.dt
-
-        # limitt the integral term
+        #integral error
+        self.integral = np.sum(self.error_prev)*self.dt
+        # limit the integral term
         if self.ilimit !=0:
             self.integral = np.clip(self.integral,-self.ilimit, self.ilimit)
-
         self.out += self.ki*self.integral
 
-        # limitt the total output
+        # limit the total output
         if self.outlimit !=0:
             self.out = np.clip(self.out, -self.outlimit, self.outlimit)
 
-        return self.out
+        return self.out + self.bias

@@ -6,7 +6,6 @@ from opto.utils import bounds
 from opto.opto.acq_func import EI
 from opto import regression
 
-
 import numpy as np
 import matplotlib.colors as color
 import matplotlib.pyplot as plt
@@ -29,6 +28,17 @@ from ExecuteTrain import getInput
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from PIDPolicy import policy
 
+'''Defines a class and numerous methods for performing Bayesian Optimization
+    Variables: - PID_Object: object to Opto object to optimize
+               - PIDMODE: PID policy mode (euler...rate etc)
+               - n_parameters: number of total PID parameters for the policy we are testing
+               - task: an opttask that is to be optimized through the Opto library
+               - Stop: stop criteria for BO
+               - sim: boolean signalling whether we are using a simulation (includes position in state)
+    Methods: - optimize: uses opto library and EI acquisition to perform BO
+             - getParameters: returns the results of bayesian optimization
+'''
+
 ############################################################################
 '''Dictionaries for indices of state inputs for simulation data vs ionocraft data'''
 simDict = {'X': 0,'Y': 1,'Z': 2,'vx': 3,'vy': 4,'vz': 5,'yaw': 6,'pitch': 7,'roll': 8,
@@ -38,16 +48,17 @@ ionoDict = {'pitchRate': 0,'rollRate': 1,'yawRate': 2,'pitch': 3,'roll': 4,'yaw'
 ############################################################################
 '''Class for bayesian optimization w.r.t. PID values and objective loss'''
 class BOPID():
-    def __init__(self, model, bomode, boobjective, pidmode, evals, equil, dt, sim = False, dataset = None, path = None):
-        self.PID_Object = PID_Objective(model = model, BOMODE=bomode, BOOBJECTIVE = boobjective, PIDMODE = pidmode, dt = dt, equil = equil, sim = sim, dataset = dataset, path = path)
-        self.PIDMODE = pidmode
+    def __init__(self, BOdict, PolicyDict):
+        self.PID_Object = PID_Objective(BOdict, PolicyDict)
+        self.PIDMODE = BOdict['POLICYMODE']
+        evals = BOdict['ITERATIONS']
         zeros = [0,0,0]
-        maximums = [250, 150, 5]
-        if pidmode == 'EULER':
+        maximums = [300, 150, 20]
+        if self.PIDMODE == 'EULER':
             self.n_parameters = 9
-        elif pidmode == 'HYBRID':
+        elif self.PIDMODE == 'HYBRID':
             self.n_parameters = 12
-        elif pidmode == 'RATE' or pidmode == 'ALL':
+        elif self.PIDMODE == 'RATE' or self.PIDMODE == 'ALL':
             self.n_parameters = 18
         else:
             print("Invalid PID mode selected")
@@ -57,7 +68,7 @@ class BOPID():
                     #labels_param = ['KP_pitch','KI_pitch','KD_pitch', 'KP_roll' 'KI_roll', 'KD_roll', 'KP_yaw', 'KI_yaw', 'KD_yaw', 'KP_pitchRate', 'KI_pitchRate', 'KD_pitchRate', 'KP_rollRate',
                                     #'KI_rollRate', 'KD_rollRate', "KP_yawRate", "KI_yawRate", "KD_yawRate"])
         self.Stop = StopCriteria(maxEvals=evals)
-        self.sim = sim
+        self.sim = BOdict['sim']
 
     def optimize(self):
         p = DotMap()
@@ -74,7 +85,7 @@ class BOPID():
         best = log.get_best_parameters()
         bestLoss = log.get_best_objectives()
         nEvals = log.get_n_evals()
-        best = [matrix.tolist()[0][0] for matrix in best]
+        best = [matrix.tolist() for matrix in best] #can be a buggy line 
 
         if printResults:
             print("Best PID parameters found with loss of: ", np.amin(bestLoss), " in ", nEvals, " evaluations.")
@@ -100,7 +111,7 @@ class BOPID():
 
 ####################################################################################
 '''Main function for executing PID experiments in opto BO. General information'''
-def PID_Objective(model, BOMODE='IAE', BOOBJECTIVE = 'EULER', PIDMODE = 'EULER', equil = [30000, 30000, 30000, 30000], dt = .04, sim = False, dataset = None, path = None):
+def PID_Objective(BOdict, PolicyDict):
     """
     Objective function of state data for a PID parameter tuning BO algorithm.
     Max flight time 10 seconds during rollouts. Operating at 25 Hz -> 250 Iterations.
@@ -108,11 +119,16 @@ def PID_Objective(model, BOMODE='IAE', BOOBJECTIVE = 'EULER', PIDMODE = 'EULER',
 
 ################################################################################
     '''Setting up Bayesian Optimization: model, initial conditions, parameters'''
+    BOMODE = BOdict['BOMODE']
+    BOOBJECTIVE = BOdict['BOOBJECTIVE']
+    PIDMODE = BOdict['POLICYMODE']
+    PolicyDict = PolicyDict
+    model = BOdict['model']
+    equil = BOdict['Equil']
+    dt = BOdict['dt']
+    sim = BOdict['sim']
+    dataset = BOdict['data']
 
-    assert BOMODE in ['IAE', 'Hurst'], 'Objective Function Not Found'
-    if path == None:
-        print("Error. Select a path to load model from.")
-        sys.exit(0)
     sim = sim
     if sim:
         #If this is from the simulation, it will include positions in the three leftmost columns. Stack is still 3
@@ -135,18 +151,18 @@ def PID_Objective(model, BOMODE='IAE', BOOBJECTIVE = 'EULER', PIDMODE = 'EULER',
 
 ###############################################################################
     '''General methods'''
-    def get_initial_condition():
+    def get_initial_condition(): #gets an initial condition to kickstart BO rollouts
         validInput = False
         while (not validInput):
             randidx = np.random.randint(0, length)
             state = torch.from_numpy(STATES[randidx, :])
             action = torch.from_numpy(INPUTS[randidx, :])
             output = torch.from_numpy(OUTPUTS[randidx, :])
-            if (abs(state[pitchidx]) < math.radians(5) and abs(state[rollidx]) < math.radians(5) and abs(state[yawidx]) < math.radians(15)):
+            if (abs(state[pitchidx]) < math.radians(10) and abs(state[rollidx]) < math.radians(10) and abs(state[yawidx]) < math.radians(15)):
                 validInput = True
         return state, action, output
 
-    def record_results(x, pLoss, rLoss, yLoss, itg, it):
+    def record_results(x, pLoss, rLoss, yLoss, itg, it): #saves PID parameters for piitch, roll, yaw and the losses associated with them for possible analysis later
         Ppitch.append(x[0,0])
         Ipitch.append(x[0,1])
         Dpitch.append(x[0,2])
@@ -161,7 +177,7 @@ def PID_Objective(model, BOMODE='IAE', BOOBJECTIVE = 'EULER', PIDMODE = 'EULER',
         yawLoss.append((yLoss * itg))
         its.append(it)
 
-    def devFromLstSqr(errors):
+    def devFromLstSqr(errors): #used in hurst exp. calculates deviations from least square line
         #Perform least square
         x = np.array(list(range(len(errors))))
         A = np.vstack([x, np.ones(len(errors))]).T
@@ -185,81 +201,100 @@ def PID_Objective(model, BOMODE='IAE', BOOBJECTIVE = 'EULER', PIDMODE = 'EULER',
 ###############################################################################
     '''Objective functions '''
     def IAE(x):
-        SECONDS = 5 #Tuneable parameter. Number of seconds the rollout should simulate
+        SECONDS = 10 #Tuneable parameter. Number of seconds the rollout should simulate
         HERTZ = int(1/dt) #Not tuneable parameter. The frequency the data was operating on. Don't change unless we change the training frequency
+        it = 5
+        eWeight = 10
+        tWeight = 2
 
-        PIDPolicy = policy((x[0]).tolist()[0], PIDMODE, dt, equil = equil)
+        eRatio = eWeight / (eWeight + tWeight)
+        tRatio = tWeight / (eWeight + tWeight)
+
+        PolicyDict['PID'] = (x[0]).tolist()[0]
+        PIDPolicy = policy(PolicyDict)
 
         iLoss = torch.tensor([0]).double()
         rLoss = 0
         pLoss = 0
         yLoss = 0
+        time = 0
 
         maximumLoss = (SECONDS * HERTZ) * (math.radians(30)) * dt * 9 * 2
         itg = 1/maximumLoss #intuition: try best to "normalize" the outputs. Divide by the max amount of iLoss a rollout could've garnered
-
-        state, action, outTarget = get_initial_condition()
         max = math.radians(30)
 
-        for i in range (SECONDS * HERTZ): #tuneable number of runs for each PID input. Remember: 4 of these are used for just getting a full input
-            '''Pass into the model'''
-            state = torch.reshape(state, (1, -1))
-            action = torch.reshape(action, (1,-1))
-            output = model.predict(state, action) #pre and post processing already handled
-            if torch.isnan(torch.FloatTensor(output)).byte().any():
-                print("Ending this rollout due to nan value")
-                break
-            if model.prob:
-                newState = torch.from_numpy(gaussianState(output)).double()
-            else:
-                newState = output.double()
+        for j in range(it):
+            state, action, outTarget = get_initial_condition()
+            for i in range (SECONDS * HERTZ): #tuneable number of runs for each PID input. Remember: 4 of these are used for just getting a full input
+                '''Pass into the model'''
+                state = torch.reshape(state, (1, -1))
+                action = torch.reshape(action, (1,-1))
+                output = model.predict(state, action) #pre and post processing already handled
+                if torch.isnan(torch.FloatTensor(output)).byte().any():
+                    print("Ending this rollout due to nan value")
+                    break
+                if model.prob:
+                    newState = torch.from_numpy(gaussianState(output)).double()
+                else:
+                    newState = output.double()
 
-            if (abs(newState[pitchidx]) > max or abs(newState[rollidx]) > max or abs(newState[yawidx]) > max): #in case of system failure
-                #print("Roll or pitch has exceeded 30 degrees. Ending run after ", i, " iterations!"
-                iLoss += 9 * max * ((SECONDS * HERTZ) - i) * dt#calculate by taking the max loss contributed by pitch, roll, yaw rate
-                break
+                if (abs(newState[pitchidx]) > max or abs(newState[rollidx]) > max or abs(newState[yawidx]) > max): #in case of system failure
+                    #print("Roll or pitch has exceeded 30 degrees. Ending run after ", i, " iterations!"
+                    #iLoss += 9 * max * ((SECONDS * HERTZ) - i) * dt#calculate by taking the max loss contributed by pitch, roll, yaw rate
+                    break
 
-            state = (state[0]).double()
-            action = (action[0]).double()
+                state = (state[0]).double()
+                action = (action[0]).double()
 
-            #still keeping track of the pitch, rolls, and yawRates to visually analyze stability
-            pLoss += abs(newState[pitchidx].detach()) * dt
-            rLoss += abs(newState[rollidx].detach()) * dt
-            yLoss += abs(newState[yawidx].detach()) * dt
+                #still keeping track of the pitch, rolls, and yawRates to visually analyze stability
+                pLoss += abs(newState[pitchidx].detach()) * dt
+                rLoss += abs(newState[rollidx].detach()) * dt
+                yLoss += abs(newState[yawidx].detach()) * dt
 
-            if BOOBJECTIVE == 'EULER':
-                iLoss += (abs(newState[pitchidx].detach()) + abs(newState[rollidx].detach()) + abs(newState[yawidx].detach())) * dt
-            elif BOOBJECTIVE == 'RATE':
-                iLoss += (abs(newState[pitchRidx].detach()) + abs(newState[rollRidx].detach()) + abs(newState[yawRidx].detach())) * dt
-            elif BOOBJECTIVE == 'HYBRID':
-                iLoss += (abs(newState[pitchidx].detach()) + abs(newState[rollidx].detach()) + abs(newState[yawRidx].detach())) * dt
-            elif BOOBJECTIVE == 'ALL':
-                iLoss += (abs(newState[pitchidx].detach()) + abs(newState[rollidx].detach()) + abs(newState[yawidx].detach()) + abs(newState[pitchRidx].detach()) + abs(newState[rollRidx].detach()) + abs(newState[yawRidx].detach())) * dt
-            else:
-                print("Error: wrong objective mode selected.")
-                sys.exit(0)
-                break
+                #objective loss is calculated depending on the BO objective we are trying to achieve
+                if BOOBJECTIVE == 'EULER':
+                    iLoss += (abs(newState[pitchidx].detach()) + abs(newState[rollidx].detach()) + abs(newState[yawidx].detach())) #* dt
+                elif BOOBJECTIVE == 'RATE':
+                    iLoss += (abs(newState[pitchRidx].detach()) + abs(newState[rollRidx].detach()) + abs(newState[yawRidx].detach())) * dt
+                elif BOOBJECTIVE == 'HYBRID':
+                    iLoss += (abs(newState[pitchidx].detach()) + abs(newState[rollidx].detach()) + abs(newState[yawRidx].detach())) * dt
+                elif BOOBJECTIVE == 'ALL':
+                    iLoss += (abs(newState[pitchidx].detach()) + abs(newState[rollidx].detach()) + abs(newState[yawidx].detach()) + abs(newState[pitchRidx].detach()) + abs(newState[rollRidx].detach()) + abs(newState[yawRidx].detach())) * dt
+                else:
+                    print("Error: wrong objective mode selected.")
+                    sys.exit(0)
+                    break
 
-            newStateList = newState.tolist()
-            newStateList = [math.degrees(newStateList[pitchidx]), math.degrees(newStateList[rollidx]), math.degrees(newStateList[yawidx])]
-            PIDPolicy.update(newStateList) #the policy updates only based on the pitch, roll, and yaw
-            new_act = PIDPolicy.chooseAction().double()
+                #update the PID outputs
+                newStateList = newState.tolist()
+                newStateList = [math.degrees(newStateList[pitchidx]), math.degrees(newStateList[rollidx]), math.degrees(newStateList[yawidx])]
+                PIDPolicy.update(newStateList) #the policy updates only based on the pitch, roll, and yaw
+                new_act = PIDPolicy.chooseAction().double()
+                #state = newState
+                #action = new_act
 
-            #nState = int(model.n_in_state/model.stack)
-            #nInput = int(model.n_in_input/model.stack)
-            #state = torch.cat((state.narrow(0,nState,(nState) * (model.stack - 1)), newState.detach()), 0)
-            #action = torch.cat((action.narrow(0,nInput,(nInput) * (model.stack -1)), new_act), 0)
-            state = newState
-            action = new_act
-        iLoss = iLoss * itg
+                #change the states and actions based on how much we have stacked
+                nState = int(model.n_in_state/model.stack)
+                nInput = int(model.n_in_input/model.stack)
+                state = torch.cat((state.narrow(0,nState,(nState) * (model.stack - 1)), newState.detach()), 0)
+                action = torch.cat((action.narrow(0,nInput,(nInput) * (model.stack -1)), new_act), 0)
+
+            #add i+1 to time to track how much total time this policy took
+            time += i+1
+        #iLoss = iLoss * itg
+        iLoss = (iLoss / (i + 1))/it #iloss per frame per iteration
         #print("iLoss:", iLoss, " after ", i + 1, " iterations")
         #print("")
 
         record_results(x, pLoss, rLoss, yLoss, itg, i+1)
-        return iLoss
+        #total loss is divided by 3*max to normalize it. Second term penalizes rollouts with less flight time
+        totLoss = ((iLoss/(3 * max))) #- ((tRatio*time)/ (SECONDS * HERTZ * it))
+        return totLoss
 
     def Hurst(x):
-        '''The Hurst exponent is an attribute that, when computed, represents
+        '''OUT OF DATE! MUST UPDATE TO SUPPORT NEW IMPLEMENTATIONS
+
+        The Hurst exponent is an attribute that, when computed, represents
         the presence of long-term correlation among error signals. Generally an exponent
         value of:
             - alpha = .5  -> white noise signal
@@ -398,7 +433,7 @@ Dyaw = []
 yawLoss = []
 its = []
 ################################################################################
-'''Plotting and visualizing results'''
+'''Plotting and visualizing results. Makes a 3D grid plotting individual pitch, roll, yaw losses wrt PID parameters'''
 
 def scatter3d(x,y,z, cs, name, colorsMap='viridis'):
     cm = plt.get_cmap(colorsMap)

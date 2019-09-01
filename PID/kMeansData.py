@@ -16,23 +16,24 @@ class kClusters():
         labels: returns the centroids
         cluster: takes a dataset and clusters each datapoint into k clusters
         sample: uniformly samples from each of the clusters and returns array with x points from each cluster
-        plot: takes a dataset and performs clustering with k within given range inclusive. Displays graph with inertia wrt #clusters'''
+        plot: takes a dataset and performs clustering with k within given range inclusive. Displays graph with inertia wrt num of clusters'''
 
 ################################################################################
     '''General methods. Init and methods to return certain parameters'''
 
-    def __init__(self, numClusters = 8):
+    def __init__(self, numClusters = 8, padding = 50):
         self.k = numClusters
+        self.padding = padding
         self.totPoints = 0
         self.distance = None
         self.KMean = KMeans(n_clusters = numClusters)
         self.assignments = {}
         self.x = 0 #minimum number of points in a cluster
 
-    def numberClusters(self):
-        return k
+    def numberClusters(self): #returns how many clusters there are
+        return self.k
 
-    def labels(self):
+    def labels(self): #returns the labels of each of the clusters
         return self.KMean.labels_
 
 ################################################################################
@@ -73,66 +74,24 @@ class kClusters():
     def sample(self):
         '''General attributes and varibles'''
 
-        BUFF = .2 #designates how many more of these points we want in the training set (1 + BUFF) = percentage more than other clusters
-        PADDING = 0 #add this many sampling points to each of the clusters to ideally get closer to the .8 split ratio
-
         if (len(self.assignments) == 0):
             print("No clustering yet. Sampling unsuccessful")
             return None
         result = None
-        empty = True
-        '''
-        Finding centroids that correspond to requested extra requested data points
+        empty = True #flag signaling whether our result has anything in it
 
-        centroids = list(self.KMean.cluster_centers_)
-        indices = list(range(self.k))
-        map = list(zip(indices, centroids))
-        map.sort(key = lambda centroid: centroid[1][-7] + centroid[1][-8] + centroid[1][-9]) #not squared since negative values need to be taken into account
-        highOmega = map[:int(self.k / 6)] + map[5* int(self.k / 6):] #take the far sixths of extremes
-        map.sort(key = lambda points: (points[1][-4] + points[1][-5] + points[1][-6]))
-        midEuler = map[int(self.k / 3): 2 * int(self.k / 3)]
-        assert self.KMean.predict(centroids[0].reshape(1,-1)) == 0 #Checks that assumption is correct...that the index of our centroids corresponds to the labels
-
-        Sampling from the requested extra centroids
-        for i in range(int(self.x * BUFF)):
-            for centroid in highOmega:
-                label = centroid[0]
-                points = self.assignments[label]
-                if points.shape[0] == 0:
-                    print("Out of points to sample from cluster: ", cluster)
-                    break;
-                idx = np.random.randint(0, points.shape[0])
-                if empty:
-                    result = points[idx, :]
-                    empty = False
-                else:
-                    result = np.vstack((result, points[idx, :]))
-                self.assignments[label]=  np.delete(points, idx, 0)
-            for centroid in midEuler:
-                label = centroid[0]
-                points = self.assignments[label]
-                if points.shape[0] == 0:
-                    print("Out of points to sample from cluster: ", cluster)
-                    break;
-                idx = np.random.randint(0, points.shape[0])
-                result = np.vstack((result, points[idx, :]))
-                self.assignments[label]=  np.delete(points, idx, 0)
-        print("Sampled an extra ", len(result), " from the requested centroids.")
-        print("")'''
-
-        '''Normal sampling from each of the clusters'''
-        for i in range(self.x + PADDING):
+        '''Sampling'''
+        for i in range(self.x + self.padding):
             for cluster, points in self.assignments.items():
-                if points.shape[0] == 0:
-                    print("Out of points to sample from cluster: ", cluster)
+                if points.shape[0] == 0: #out of points to sample from this cluster
                     break
-                idx = np.random.randint(0, points.shape[0])
+                idx = np.random.randint(0, points.shape[0]) #choosing a random idx to sample from our cluster
                 if empty:
                     result = points[idx, :]
                     empty = False
                 else:
                     result = np.vstack((result, points[idx,:]))
-                self.assignments[cluster] = np.delete(points, idx, 0)
+                self.assignments[cluster] = np.delete(points, idx, 0) #delete the point we just sampled from our cluster
 
         '''Returns the sampled points and the points that were not sampled in two different variables'''
 
@@ -140,7 +99,7 @@ class kClusters():
         print("Number of data points after sampling: ", numPoints)
         empty = True
         leftover = None
-        for cluster, points in self.assignments.items():
+        for cluster, points in self.assignments.items(): #retrieving all the leftover points from each of our clusters
             if empty:
                 leftover = points
                 empty = False

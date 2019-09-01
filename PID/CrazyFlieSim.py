@@ -3,11 +3,13 @@
 import numpy as np
 import math
 from PIDPolicy import policy
-from ExecuteTrain import getState, degToRad, radToDeg
+from Initial import getState, degToRad, radToDeg
 from Visualizer import GUI
+import matplotlib.pyplot as plt
+from RolloutAnalysis import Analysis
 
 class CrazyFlie():
-    def __init__(self, dt, m=.035, L=.065, Ixx=2.3951e-5, Iyy=2.3951e-5, Izz=3.2347e-5, x_noise=.0000001, u_noise=0):
+    def __init__(self, dt, m=.035, L=.065, Ixx=2.3951e-5, Iyy=2.3951e-5, Izz=3.2347e-5, x_noise=.001, u_noise=0):
         self._state_dict = {
             'X': [0, 'pos'],
             'Y': [1, 'pos'],
@@ -22,9 +24,7 @@ class CrazyFlie():
             'w_y': [10, 'omega'],
             'w_z': [11, 'omega']
         }
-        # user can pass a list of items they want to train on in the neural net, eg learn_list = ['vx', 'vy', 'vz', 'yaw'] and iterate through with this dictionary to easily stack data
 
-        # input dictionary less likely to be used because one will not likely do control without a type of acutation. Could be interesting though
         self._input_dict = {
             'Thrust': [0, 'force'],
             'taux': [1, 'torque'],
@@ -63,11 +63,13 @@ class CrazyFlie():
         self.recentDataset = None
 
     def pqr2rpy(self, x0, pqr):
-        rotn_matrix = np.array([[1., math.sin(x0[0]) * math.tan(x0[1]), math.cos(x0[0]) * math.tan(x0[1])],
-                                [0., math.cos(
-                                    x0[0]),                   -math.sin(x0[0])],
-                                [0., math.sin(x0[0]) / math.cos(x0[1]), math.cos(x0[0]) / math.cos(x0[1])]])
-        return rotn_matrix.dot(pqr)
+        #x0: yaw/psi, pitch/theta, roll/phi
+        rotn_matrix = np.array([[1., math.sin(x0[2]) * math.tan(x0[1]), math.cos(x0[2]) * math.tan(x0[1])],
+                                [0., math.cos(x0[2]),-math.sin(x0[2])],
+                                [0., math.sin(x0[2]) / math.cos(x0[1]), math.cos(x0[2]) / math.cos(x0[1])]])
+        #x02 is the roll angle and x01 is the pitch angle...x00 would be the yaw angle
+        #pqr should be rotations around x,y,then z from body frame of the sensor (pitch rate, roll rate, yaw rate)
+        return np.flip(rotn_matrix.dot(pqr), 0)
 
     def pwm_thrust_torque(self, PWM):
         # Takes in the a 4 dimensional PWM vector and returns a vector of
@@ -135,11 +137,6 @@ class CrazyFlie():
         Ty = np.array([Izz / Iyy - Ixx / Iyy, L / Iyy])
         Tz = np.array([Ixx / Izz - Iyy / Izz, 1. / Izz])
 
-        # # Add noise to input
-        # u_noise_vec = np.random.normal(
-        #     loc=0, scale=self.u_noise, size=(self.u_dim))
-        # u = u+u_noise_vec
-
         # Array containing the forces
         Fxyz = np.zeros(3)
         Fxyz[0] = -1 * (math.cos(x0[idx_ptp[0]]) * math.sin(x0[idx_ptp[1]]) * math.cos(
@@ -158,8 +155,7 @@ class CrazyFlie():
         x1[idx_xyz_dot] = x0[idx_xyz_dot] + dt * Fxyz
         x1[idx_ptp_dot] = x0[idx_ptp_dot] + dt * Txyz
         x1[idx_xyz] = x0[idx_xyz] + dt * x0[idx_xyz_dot]
-        x1[idx_ptp] = x0[idx_ptp] + dt * \
-            self.pqr2rpy(x0[idx_ptp], x0[idx_ptp_dot])
+        x1[idx_ptp] = x0[idx_ptp] + dt * self.pqr2rpy(x0[idx_ptp], x0[idx_ptp_dot])
 
         # Add noise component
         if addNoise:
@@ -171,10 +167,17 @@ class CrazyFlie():
             x1[x1 < 1e-12]
             return x1
 
-    def test_policy(self, initStates, policy, iterations, visuals, maxFrames = 500, addNoise = False, maxCond = 50):
-        '''Set up other ways of gauging fitness instead of TIME'''
+    def test_policy(self, simDict):
+
+        visuals = simDict['visuals']
+        initStates = simDict['initStates']
+        iterations = simDict['simFlights']
+        maxCond = simDict['maxAngle']
+        maxFrames = simDict['maxRollout']
+        addNoise = simDict['addNoise']
+        policy = simDict['policy']
         if visuals:
-            visualizer = GUI(10)
+            visualizer = GUI(1) #initializes graphic display of quadcopter if requested
         time = []
         firstAddToRecent = True
         i = 0
@@ -183,9 +186,9 @@ class CrazyFlie():
         rollidx = self._state_dict['roll'][0]
         yawidx = self._state_dict['yaw'][0]
         while i < iterations:
-            index = np.random.randint(0, np.shape(initStates)[0])
+            index = np.random.randint(0, np.shape(initStates)[0]) #randomly find initial condition
             state = (initStates[index, :])
-            if abs(state[pitchidx])> math.radians(5) or abs(state[rollidx])> math.radians(5):
+            if abs(state[pitchidx])> math.radians(10) or abs(state[rollidx])> math.radians(10) or abs(state[yawidx]) > math.radians(15):
                 continue #find new input
             #print("")
             #print("Beginning flight number ", i + 1)
@@ -197,11 +200,16 @@ class CrazyFlie():
             first = True
             error = 0
             max = math.radians(maxCond)
+
+            pitch = []
+            roll = []
+            yaw = []
             while not failed and frames < maxFrames:
+                #update the policy based on the DEGREES. (Returned states from simulation are in radians)
                 policy.update([math.degrees(state[pitchidx]), math.degrees(state[rollidx]), math.degrees(state[yawidx])])
-                PWM = policy.chooseAction()
+                PWM = policy.chooseAction() #choose random action and simulate based on state
                 newState = self.simulate(state, PWM.numpy(), addNoise = addNoise)
-                if visuals:
+                if visuals: #update the visualization
                     pos = newState[0:3]
                     euler = np.array([newState[pitchidx], newState[rollidx], newState[yawidx]])
                     visualizer.update(self.dt, pos, euler)
@@ -210,20 +218,20 @@ class CrazyFlie():
                     U_temp = PWM.numpy().reshape(1,-1)
                     X1_temp = newState.reshape(1,-1)
                     first = False
-                else:
+                else: #store the results from the simulation
                     X0_temp = np.vstack((X0_temp, state))
                     U_temp = np.vstack((U_temp, PWM.numpy()))
                     X1_temp = np.vstack((X1_temp, newState))
-                state = newState
+                state = newState #prepare for next iteration
                 frames += 1
-                error += newState[pitchidx] + newState[rollidx] + newState[yawidx]
+                error += newState[pitchidx] + newState[rollidx] + newState[yawidx] #take account the error of this state
                 if abs(state[pitchidx]) > max or abs(state[rollidx]) > max or abs(state[yawidx]) > max:
                     failed = True
-            error += (maxFrames - frames) * max * 3
+            error = error / frames #avg error
             time += [frames]
-            rewards = [[frames] for k in range(frames)]
+            rewards = [[frames] for k in range(frames)] #keeps track of total flight time
             rewards = (np.array(rewards))
-            flightnum = [[i] for j in range(frames)]
+            flightnum = [[i] for j in range(frames)] #states which flight a datapoint is a part of
             flightnum = np.array(flightnum)
             result = np.hstack((X0_temp, U_temp, X1_temp, rewards, flightnum))
             i += 1
@@ -238,53 +246,3 @@ class CrazyFlie():
 
     def get_recent_data(self):
         return self.recentDataSet
-
-    def stackDataset(self, dataset, dimX, dimU, dimdX, stack, rewardTime = False, minimumFrames = 200):
-        '''Takes in a dataset returned by get_recent_data and stacks it in preparation for passing into the ensemble neural network
-            Since this includes the position, each state would be 12 * numStacks length and action will be 4 * numStacks length. Resulting state should simply be 12.'''
-        rows = np.shape(dataset)[0] - stack
-        columns = dimX * stack + dimU * stack + dimdX
-        result = np.zeros((1, columns)) #dummy
-        X = dataset[:,:dimX]
-        U = dataset[:,dimX:dimX+dimU]
-        dX = dataset[:,dimX+dimU:-2] #don't want to take into account the REWARD just yet
-        rewards = dataset[:, -2:-1]
-        flightnum = dataset[:, -1:]
-        assert np.shape(X)[1] == dimX and np.shape(dX)[1] == dimdX
-        for i in range(rows):
-            if flightnum[i, 0] != flightnum[i + (stack - 1), 0]:
-                continue #this means the two concatenated datapoints are not from the same rollout
-            currX = X[i, :]
-            currU = U[i, :]
-            currdX = dX[i + (stack - 1), :]
-            for j in range(stack - 1):
-                currX = np.hstack((currX, X[i + j + 1, :]))
-                currU = np.hstack((currU, U[i + j + 1, :]))
-            result = np.vstack((result, np.hstack((currX, currU, currdX))))
-        extra = np.zeros((1, columns))
-        if rewardTime: #this implementation should technically take constant time
-            index = 0
-            offsets = []
-            size = []
-            length = np.shape(rewards)[1]
-            slices = []
-            while index < length: #making offsets and size lists
-                offsets += [index]
-                size  += [rewards[index, 0]]
-                index += rewards[index, 0]
-            for i, s in enumerate(size):
-                if s < minimumFrames:
-                    continue
-                slices += [[int(offsets[i]), int(offsets[i] + size[i])]]
-            for slice in slices: #recursive step
-                extraData = np.hstack(self.stackDataset(dataset[slice[0]:slice[1], :], dimX, dimU, dimdX, stack, False, minimumFrames))
-                extra = np.vstack((extra, extraData))
-        X = result[1:, :dimX * stack]
-        U = result[1:, dimX * stack: dimX*stack + dimU * stack]
-        dX = result[1:, dimX*stack + dimU * stack:]
-        if not rewardTime:
-            return (X,U,dX), None
-        exX = extra[1:, :dimX * stack]
-        exU = extra[1:, dimX * stack: dimX*stack + dimU * stack]
-        exdX = extra[1:, dimX*stack + dimU * stack:]
-        return (X, U, dX), (exX, exU, exdX)

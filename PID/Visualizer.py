@@ -42,6 +42,7 @@ class GUI():
 
     def update(self, dt, position, euler):
         #position: x, y, z  euler: pitch, roll, yaw
+        #updates the graphics to reflect new positions, orientations, and velocities
         R = self.rotation_matrix(euler)
         L = 1
         points = np.array([ [-L,0,0], [L,0,0], [0,-L,0], [0,L,0], [0,0,0], [0,0,0] ]).T
